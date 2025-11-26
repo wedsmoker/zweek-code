@@ -19,7 +19,8 @@ void ChatMode::UnloadModel() {
 void ChatMode::ClearHistory() { history_.clear(); }
 
 std::string ChatMode::Chat(const std::string &user_message,
-                           const std::vector<std::string> &context_files) {
+                           const std::vector<std::string> &context_files,
+                           std::function<void(const std::string &)> stream_callback) {
   if (!model_loaded_) {
     LoadModel("models/tinyllama-chat.gguf");
   }
@@ -30,7 +31,8 @@ std::string ChatMode::Chat(const std::string &user_message,
 
   std::string prompt =
       "You are a helpful coding assistant. Answer: " + user_message;
-  std::string response = model_loader_.Infer(prompt, "", 512);
+  // Increased max tokens to 2048 to prevent cutoff
+  std::string response = model_loader_.Infer(prompt, "", 2048, stream_callback);
 
   history_.push_back({"user", user_message});
   history_.push_back({"assistant", response});

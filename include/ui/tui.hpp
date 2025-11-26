@@ -53,6 +53,7 @@ public:
   void SetQualityReport(const std::string &report);
   void SetError(const std::string &error);
   void AddToHistory(const std::string &message);
+  void AppendToLastMessage(const std::string &chunk);
 
   // Mode switching
   void SetMode(Mode mode);

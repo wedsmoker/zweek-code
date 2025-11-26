@@ -22,6 +22,7 @@ public:
   // Set callbacks for UI updates
   void SetProgressCallback(std::function<void(const std::string &)> callback);
   void SetResponseCallback(std::function<void(const std::string &)> callback);
+  void SetStreamCallback(std::function<void(const std::string &)> callback);
 
 private:
   // Workflow handlers
@@ -36,6 +37,7 @@ private:
   // Callbacks
   std::function<void(const std::string &)> progress_callback_;
   std::function<void(const std::string &)> response_callback_;
+  std::function<void(const std::string &)> stream_callback_;
 };
 
 } // namespace pipeline

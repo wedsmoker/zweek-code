@@ -65,6 +65,21 @@ void TUI::AddToHistory(const std::string &message) {
   screen_.PostEvent(Event::Custom);
 }
 
+void TUI::AppendToLastMessage(const std::string &chunk) {
+  if (state_.conversation_history.empty()) {
+    state_.conversation_history.push_back("");
+  }
+
+  for (char c : chunk) {
+    if (c == '\n') {
+      state_.conversation_history.push_back("");
+    } else {
+      state_.conversation_history.back() += c;
+    }
+  }
+  screen_.PostEvent(Event::Custom);
+}
+
 void TUI::SetMode(Mode mode) {
   state_.current_mode = mode;
   state_.conversation_history.push_back("Switched to " + ModeToString(mode) +

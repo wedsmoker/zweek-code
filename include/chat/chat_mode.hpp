@@ -28,7 +28,8 @@ public:
 
   // Chat with context
   std::string Chat(const std::string &user_message,
-                   const std::vector<std::string> &context_files);
+                   const std::vector<std::string> &context_files,
+                   std::function<void(const std::string &)> stream_callback);
 
   // Get conversation history
   const std::vector<Message> &GetHistory() const { return history_; }

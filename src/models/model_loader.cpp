@@ -67,6 +67,12 @@ bool ModelLoader::Load(const std::string &model_path, int n_ctx) {
   llama_sampler_chain_add(sampler_, llama_sampler_init_top_k(40));
   llama_sampler_chain_add(sampler_, llama_sampler_init_top_p(0.95f, 1));
   llama_sampler_chain_add(sampler_, llama_sampler_init_temp(0.7f));
+  
+  // Add repetition penalty (1.1 is a good default)
+  // last_n = 64, repeat_penalty = 1.1, alpha_frequency = 0.0, alpha_presence = 0.0
+  llama_sampler_chain_add(sampler_, 
+      llama_sampler_init_penalties(64, 1.1f, 0.0f, 0.0f));
+
   llama_sampler_chain_add(sampler_,
                           llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
@@ -91,16 +97,18 @@ void ModelLoader::Unload() {
   }
 }
 std::string ModelLoader::Infer(const std::string &prompt,
-                               const std::string &grammar, int max_tokens) {
+                               const std::string &grammar, int max_tokens,
+                               std::function<void(const std::string &)> stream_callback) {
   if (!model_ || !ctx_) {
     return "[Error: Model not loaded]";
   }
 
-  return RunInference(prompt, grammar, max_tokens);
+  return RunInference(prompt, grammar, max_tokens, stream_callback);
 }
 std::string ModelLoader::RunInference(const std::string &prompt,
                                       const std::string &grammar,
-                                      int max_tokens) {
+                                      int max_tokens,
+                                      std::function<void(const std::string &)> stream_callback) {
   // Tokenize
   std::vector<llama_token> tokens;
   tokens.resize(prompt.size() + 16);
@@ -132,10 +140,21 @@ std::string ModelLoader::RunInference(const std::string &prompt,
       std::string token_str(buf, n);
 
       // Word wrap: insert newline if line gets too long
-      if (line_length + token_str.length() > MAX_LINE_LENGTH &&
-          token_str.find(' ') == std::string::npos) {
-        result += "\n";
-        line_length = 0;
+      if (line_length + token_str.length() > MAX_LINE_LENGTH) {
+        bool wrapped = false;
+        // If token starts with space, replace it with newline
+        if (!token_str.empty() && token_str[0] == ' ') {
+          token_str[0] = '\n';
+          line_length = 0;
+          wrapped = true;
+        }
+        // Otherwise if it's a long word or we can't find a space, force wrap
+        else if (line_length > 0) {
+          if (stream_callback) stream_callback("\n");
+          result += "\n";
+          line_length = 0;
+          wrapped = true;
+        }
       }
 
       result += token_str;
@@ -148,6 +167,10 @@ std::string ModelLoader::RunInference(const std::string &prompt,
 
       // Stream to console for immediate feedback (optional)
       // std::cout << token_str << std::flush;
+      
+      if (stream_callback) {
+        stream_callback(token_str);
+      }
     }
 
     batch = llama_batch_get_one(&tok, 1);

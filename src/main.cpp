@@ -20,6 +20,10 @@ int main(int argc, char **argv) {
     tui.UpdateStage(PipelineStage::Complete, 1.0f);
   });
 
+  orchestrator.SetStreamCallback([&](const std::string &chunk) {
+    tui.AppendToLastMessage(chunk);
+  });
+
   // Set up TUI callbacks
   tui.SetOnSubmit([&](const std::string &request) {
     std::cout << "Processing: " << request << std::endl;

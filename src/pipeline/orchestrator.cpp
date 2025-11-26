@@ -65,6 +65,11 @@ void Orchestrator::SetResponseCallback(
   response_callback_ = callback;
 }
 
+void Orchestrator::SetStreamCallback(
+    std::function<void(const std::string &)> callback) {
+  stream_callback_ = callback;
+}
+
 void Orchestrator::RunCodePipeline(const std::string &request) {
   // TODO: Implement 5-model pipeline
   // For now, just mock it
@@ -80,11 +85,22 @@ void Orchestrator::RunCodePipeline(const std::string &request) {
 void Orchestrator::RunChatMode(const std::string &request) {
   // Use ChatMode to respond
   std::vector<std::string> context; // TODO: Get relevant files
-  std::string response = chat_mode_.Chat(request, context);
-
+  
+  // Initial empty response to start the stream
   if (response_callback_) {
-    response_callback_(response);
+    response_callback_(""); 
   }
+
+  std::string response = chat_mode_.Chat(request, context, [&](const std::string& chunk) {
+    if (stream_callback_) {
+      stream_callback_(chunk);
+    }
+  });
+
+  // Final complete response (optional, or just rely on stream)
+  // if (response_callback_) {
+  //   response_callback_(response);
+  // }
 }
 
 void Orchestrator::RunToolMode(const std::string &request) {

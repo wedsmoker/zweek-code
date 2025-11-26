@@ -115,7 +115,7 @@ cmake -S . -B build -G "Visual Studio 17 2022"
 ### Step 4: Build the Project
 
 ```powershell
-cmake --build build
+ 
 ```
 
 **What this does:**

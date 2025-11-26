@@ -22,7 +22,8 @@ Intent Router::ClassifyIntent(const std::string &user_input) {
                        user_input + "\nClassification:";
 
   std::string result =
-      model_loader_.Infer(prompt, grammars::ROUTER_GRAMMAR, 10);
+      model_loader_.Infer(prompt, grammars::ROUTER_GRAMMAR, 10,
+                          [](const std::string &) {});
 
   // Parse result
   std::string lower = result;
