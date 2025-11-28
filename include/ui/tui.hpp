@@ -40,6 +40,14 @@ struct TUIState {
   int scroll_position = 0; // For manual scrolling (-1 = sticky bottom)
   std::vector<std::string> command_history; // Previous submitted commands
   int history_index = -1; // Current position in history (-1 = not browsing)
+  std::atomic<bool> interrupt_inference_{false}; // Set to true to interrupt model
+  
+  // Thinking section support
+  std::string current_thinking;  // Buffer for thinking content
+  std::string current_answer;    // Buffer for final answer
+  bool in_thinking_section = true;  // Track which section we're in
+  bool show_thinking = true;     // Toggle thinking visibility
+  int spinner_frame = 0;         // Spinner animation frame
 };
 
 class TUI {
@@ -68,6 +76,9 @@ public:
   void SetOnReject(std::function<void()> callback);
   void SetOnModify(std::function<void()> callback);
   void SetOnModeSwitch(std::function<void(Mode)> callback);
+  
+  // Access to state (for interrupt flag)
+  TUIState& GetState() { return state_; }
 
 private:
   ftxui::Component CreateLayout();

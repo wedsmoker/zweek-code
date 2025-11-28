@@ -26,10 +26,16 @@ int main(int argc, char **argv) {
   orchestrator.SetStreamCallback([&](const std::string &chunk) {
     tui.AppendToLastMessage(chunk);
   });
+  
+  // Connect interrupt flag from TUI to orchestrator
+  orchestrator.SetInterruptFlag(&tui.GetState().interrupt_inference_);
 
   // Set up TUI callbacks
   tui.SetOnSubmit([&](const std::string &request) {
     std::cout << "Processing: " << request << std::endl;
+    
+    // Reset interrupt flag before starting new request
+    tui.GetState().interrupt_inference_.store(false);
 
     // Run orchestrator in background thread
     std::thread pipeline_thread([&, request]() {
@@ -45,9 +51,21 @@ int main(int argc, char **argv) {
 
   tui.SetOnModify(
       []() { std::cout << "Requesting modifications..." << std::endl; });
+  
+  // Spinner animation thread - update every 100ms
+  std::atomic<bool> running{true};
+  std::thread spinner_thread([&]() {
+    while (running) {
+      tui.GetState().spinner_frame++;
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  });
+  spinner_thread.detach();
 
   // Run the TUI
   tui.Run();
+  
+  running = false; // Stop spinner thread
 
   return 0;
 }

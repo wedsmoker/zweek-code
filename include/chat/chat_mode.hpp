@@ -3,6 +3,7 @@
 #include "models/model_loader.hpp"
 #include <string>
 #include <vector>
+#include <atomic>
 
 
 namespace zweek {
@@ -29,7 +30,8 @@ public:
   // Chat with context
   std::string Chat(const std::string &user_message,
                    const std::vector<std::string> &context_files,
-                   std::function<void(const std::string &)> stream_callback);
+                   std::function<void(const std::string &)> stream_callback,
+                   std::atomic<bool>* interrupt_flag = nullptr);
 
   // Get conversation history
   const std::vector<Message> &GetHistory() const { return history_; }

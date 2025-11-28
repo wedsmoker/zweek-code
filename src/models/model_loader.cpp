@@ -66,6 +66,8 @@ bool ModelLoader::Load(const std::string &model_path, int n_ctx) {
 
   llama_sampler_chain_add(sampler_, llama_sampler_init_top_k(40));
   llama_sampler_chain_add(sampler_, llama_sampler_init_top_p(0.95f, 1));
+  llama_sampler_chain_add(sampler_, 
+                          llama_sampler_init_penalties(64, 1.5f, 0.0f, 0.0f));
   llama_sampler_chain_add(sampler_, llama_sampler_init_temp(0.7f));
   llama_sampler_chain_add(sampler_,
                           llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
@@ -92,23 +94,25 @@ void ModelLoader::Unload() {
 }
 std::string ModelLoader::Infer(const std::string &prompt,
                                const std::string &grammar, int max_tokens,
-                               std::function<void(const std::string &)> stream_callback) {
+                               std::function<void(const std::string &)> stream_callback,
+                               std::atomic<bool>* interrupt_flag) {
   if (!model_ || !ctx_) {
     return "[Error: Model not loaded]";
   }
 
-  return RunInference(prompt, grammar, max_tokens, stream_callback);
+  return RunInference(prompt, grammar, max_tokens, stream_callback, interrupt_flag);
 }
 std::string ModelLoader::RunInference(const std::string &prompt,
                                       const std::string &grammar,
                                       int max_tokens,
-                                      std::function<void(const std::string &)> stream_callback) {
+                                      std::function<void(const std::string &)> stream_callback,
+                                      std::atomic<bool>* interrupt_flag) {
   // Tokenize
   std::vector<llama_token> tokens;
   tokens.resize(prompt.size() + 16);
   const llama_vocab *vocab = llama_model_get_vocab(model_);
   int n_tokens = llama_tokenize(vocab, prompt.c_str(), prompt.size(),
-                                tokens.data(), tokens.size(), true, false);
+                                tokens.data(), tokens.size(), true, true); // parse_special = true
   if (n_tokens < 0)
     return "[Error: Tokenization failed]";
   tokens.resize(n_tokens);
@@ -124,6 +128,19 @@ std::string ModelLoader::RunInference(const std::string &prompt,
   const int MAX_LINE_LENGTH = 80;
 
   for (int i = 0; i < max_tokens; ++i) {
+    // Check if interrupted
+    if (interrupt_flag && interrupt_flag->load()) {
+      if (stream_callback) {
+        stream_callback("\n[interrupted]");
+      }
+      result += "\n[interrupted]";
+      
+      // Reset sampler to prevent continuation
+      llama_sampler_reset(sampler_);
+      
+      break;
+    }
+
     llama_token tok = llama_sampler_sample(sampler_, ctx_, -1);
     if (llama_token_is_eog(vocab, tok))
       break;

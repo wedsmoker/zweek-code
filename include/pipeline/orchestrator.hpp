@@ -5,6 +5,7 @@
 #include "pipeline/router.hpp"
 #include <functional>
 #include <string>
+#include <atomic>
 
 
 namespace zweek {
@@ -23,6 +24,9 @@ public:
   void SetProgressCallback(std::function<void(const std::string &)> callback);
   void SetResponseCallback(std::function<void(const std::string &)> callback);
   void SetStreamCallback(std::function<void(const std::string &)> callback);
+  
+  // Set interrupt flag for cancellation
+  void SetInterruptFlag(std::atomic<bool>* flag) { interrupt_flag_ = flag; }
 
 private:
   // Workflow handlers
@@ -38,6 +42,9 @@ private:
   std::function<void(const std::string &)> progress_callback_;
   std::function<void(const std::string &)> response_callback_;
   std::function<void(const std::string &)> stream_callback_;
+  
+  // Interrupt flag
+  std::atomic<bool>* interrupt_flag_ = nullptr;
 };
 
 } // namespace pipeline

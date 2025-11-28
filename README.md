@@ -30,7 +30,7 @@ A terminal-based AI coding assistant powered by specialized local models. Unlike
 
 1. **Router** (SmolLM-135M) - Stays loaded, classifies intent with GBNF grammar
 2. **Code Drafter** (StarCoder-Tiny) - Generates code when needed
-3. **Chat** (TinyLlama-1.1B) - Answers questions about your code
+3. **Chat** (Qwen3-0.6B-Q8_0) - Answers questions about your code
 
 **Key Optimizations:**
 - Resident models stay in memory (~350MB idle)
@@ -55,7 +55,7 @@ cd zweek-code
 
 # Download models (place in models/ directory)
 # - smollm-135m-router.gguf
-# - tinyllama-chat.gguf  
+# - Qwen3-0.6B-Q8_0.gguf  
 # - starcoder-tiny.gguf
 
 cmake -S . -B build -G Ninja
@@ -92,7 +92,7 @@ Place these in `models/`:
 |-------|------|---------|-----|
 | smollm-135m-router.gguf | ~150MB | Intent classification | Resident |
 | starcoder-tiny.gguf | ~200MB | Code generation | On-demand |
-| tinyllama-chat.gguf | ~1.2GB | Q&A | On-demand |
+| Qwen3-0.6B-Q8_0.gguf | ~700MB | Q&A | On-demand |
 
 Download from HuggingFace (GGUF Q8 quantized versions).
 

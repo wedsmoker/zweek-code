@@ -1,38 +1,39 @@
-# Zweek Code - Build this in the# Models Directory
+# Models Directory
 
 This directory contains the AI models used by Zweek Code.
 
-## Auto-Download
+## Required Models
 
-Zweek Code will automatically download models on first run. If a model is already present, it won't re-download.
+Place these GGUF models in this directory:
 
-**Models will be downloaded to:**
 ```
 models/
-├── smollm-135m-router.gguf         (Router: ~150MB)
-├── tinyllama-chat.gguf             (Chat: ~1.2GB)
-├── starcoder-tiny.gguf             (Code: ~200MB)
-├── codet5-small.onnx               (Style: ~80MB)
-└── codebert-small.onnx             (Audit: ~70MB)
+├── smollm-135m-router.gguf    (Router: ~150MB)
+├── Qwen3-0.6B-Q8_0.gguf       (Chat: ~700MB)
+└── starcoder-tiny.gguf        (Code: ~200MB)
 ```
 
 ## Manual Download
 
-If you prefer to download manually, get the models from Hugging Face:
+Download GGUF quantized versions from Hugging Face:
 
-1. **SmolLM-135M (Router)**: https://huggingface.co/HuggingFaceTB/SmolLM-135M
-2. **TinyLlama-Chat**: https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0
-3. **StarCoder-Tiny**: https://huggingface.co/bigcode/tiny_starcoder_py
+1. **SmolLM-135M (Router)**: https://huggingface.co/HuggingFaceTB/SmolLM-135M-Instruct-GGUF
+   - File: `smollm-135m-router.gguf`
 
-Look for GGUF quantized versions (Q8_0 or Q4_K_M for smaller size).
+2. **Qwen3-0.6B (Chat)**: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+   - File: `Qwen3-0.6B-Q8_0.gguf` (Q8_0 quantization)
+
+3. **StarCoder-Tiny (Code)**: https://huggingface.co/bigcode/tiny_starcoder_py
+   - File: `starcoder-tiny.gguf`
 
 ## Total Size
 
-- **Full suite**: ~1.7GB
-- **Code-only (no chat)**: ~500MB
+- **Full suite**: ~1.05GB
+- **Minimal (router + code)**: ~350MB
+- **Peak RAM during inference**: ~1.2GB
 
-Models load one at a time, so peak RAM usage stays low!
-models/auditor/codebert-small-int8.onnx
+## Notes
 
-# Gatekeeper: SmolLM-135M quantized (can reuse planner model)
-models/gatekeeper/smollm-135m-q8_0.gguf
+- Models load on-demand to minimize memory usage
+- Router stays resident in memory (~150MB) for instant classification
+- Chat and code models unload after use (unless marked resident)

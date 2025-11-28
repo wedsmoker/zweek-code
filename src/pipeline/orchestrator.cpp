@@ -90,7 +90,7 @@ void Orchestrator::RunChatMode(const std::string &request) {
     if (stream_callback_) {
       stream_callback_(chunk);
     }
-  });
+  }, interrupt_flag_);
 
   // Mark as complete after streaming finishes
   if (response_callback_) {

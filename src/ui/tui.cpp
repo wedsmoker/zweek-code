@@ -67,17 +67,91 @@ void TUI::AddToHistory(const std::string &message) {
 }
 
 void TUI::AppendToLastMessage(const std::string &chunk) {
-  if (state_.conversation_history.empty()) {
-    state_.conversation_history.push_back("");
-  }
-
-  for (char c : chunk) {
-    if (c == '\n') {
-      state_.conversation_history.push_back("");
-    } else {
-      state_.conversation_history.back() += c;
+  // Detect if we're transitioning from thinking to answer
+  static std::string buffer;
+  buffer += chunk;
+  
+  // Check for Qwen3 thinking end marker: </think>
+  size_t marker_pos = buffer.find("</think>");
+  if (marker_pos != std::string::npos && state_.in_thinking_section) {
+    // Found the transition marker
+    state_.in_thinking_section = false;
+    
+    // Everything before marker is thinking
+    state_.current_thinking += buffer.substr(0, marker_pos);
+    
+    // Skip the marker itself and get answer content
+    // +8 is length of "</think>", also skip potential newline after it
+    size_t content_start = marker_pos + 8;
+    if (content_start < buffer.length() && buffer[content_start] == '\n') {
+        content_start++;
     }
+    buffer = buffer.substr(content_start);
   }
+  
+  // Append to appropriate buffer
+  if (state_.in_thinking_section) {
+    // Only append if we haven't found the marker yet
+    // If we have a partial marker at the end, we might need to wait, 
+    // but for now simple appending is safer to avoid dropping text.
+    // The previous logic handles the split when the full marker arrives.
+    // However, we need to be careful not to double-add if we just processed the marker above.
+    // Since we clear/adjust 'buffer' above, we should only append 'chunk' if we didn't just switch.
+    
+    // Actually, the logic above uses 'buffer' which accumulates. 
+    // We should NOT append 'chunk' again if we are using 'buffer'.
+    // Let's rewrite this to be cleaner using just the buffer.
+    
+    // If we are still in thinking section, we just keep accumulating in buffer
+    // We don't push to current_thinking until we confirm it's NOT part of the marker
+    // But for streaming responsiveness, we want to push safe chars.
+    
+    // Simplified approach:
+    // If we switched sections, 'buffer' now contains the start of the answer.
+    // If we didn't switch, 'buffer' contains thinking + maybe partial marker.
+    
+    if (state_.in_thinking_section) {
+       // We are still in thinking mode. 
+       // To be safe and responsive, we can push everything except the last few chars 
+       // that might be start of </think>
+       // But simpler: just push to current_thinking, and if we find marker later, 
+       // we fix it up.
+       
+       // Wait, the previous logic was:
+       // 1. buffer += chunk
+       // 2. check marker
+       // 3. if found -> split
+       // 4. append chunk to current section
+       
+       // The bug was step 4 appended 'chunk' blindly even if we just extracted it from 'buffer'.
+       // We should use 'buffer' to drive the state, but 'buffer' is static!
+       // Static buffer is dangerous if we have multiple calls. 
+       // Let's fix the logic to be robust.
+    }
+  } 
+  
+  // CORRECTED LOGIC:
+  // We already added chunk to buffer.
+  // If we found the marker, we extracted thinking and updated buffer to be answer.
+  // If we didn't find marker, buffer is all thinking (so far).
+  
+  if (!state_.in_thinking_section) {
+      // We are in answer mode.
+      state_.current_answer += buffer;
+      buffer.clear();
+  } else {
+      // We are in thinking mode.
+      // To keep UI responsive, we want to move confirmed text from buffer to current_thinking.
+      // Confirmed text is everything up to where a partial "</think>" could start.
+      // </think> is 8 chars.
+      if (buffer.length() > 8) {
+          size_t safe_len = buffer.length() - 8;
+          state_.current_thinking += buffer.substr(0, safe_len);
+          buffer = buffer.substr(safe_len);
+      }
+      // If buffer is small, keep it there to check for marker next time
+  }
+  
   screen_.PostEvent(Event::Custom);
 }
 
@@ -138,18 +212,23 @@ Component TUI::CreateTerminalView() {
                                color(Color::GrayLight) | dim);
     history_elements.push_back(text(""));
 
-    // Show conversation history (all messages, not just last 100)
+    // Show conversation history (all messages)
     int total_messages = state_.conversation_history.size();
     
     // Determine target scroll position
     int render_pos = state_.scroll_position;
     
     // Calculate total lines for clamping/sticky logic
-    // Note: This must match the actual number of elements pushed below
     int total_lines = history_elements.size() + total_messages;
+    
+    // Add thinking/answer sections if present
+    if (!state_.current_thinking.empty() || !state_.current_answer.empty()) {
+        total_lines += 3; // Thinking header + content/collapsed + answer
+    }
+    
     if (state_.current_stage != PipelineStage::Idle &&
         state_.current_stage != PipelineStage::Complete) {
-        total_lines += 2; // For status bar
+        total_lines += 2; // For spinner
     }
 
     // Sticky scrolling: if -1, jump to bottom
@@ -186,14 +265,63 @@ Component TUI::CreateTerminalView() {
       }
       history_elements.push_back(e);
     }
+    
+    // Show thinking and answer sections if streaming
+    if (!state_.current_thinking.empty() || !state_.current_answer.empty()) {
+      history_elements.push_back(text(""));
+      
+      // Thinking section (collapsible)
+      if (!state_.current_thinking.empty()) {
+        if (state_.show_thinking) {
+          Element header = text("▼ Thinking (press 't' to hide)") | color(Color::GrayDark) | dim;
+          if (history_elements.size() == render_pos) header = header | focus;
+          history_elements.push_back(header);
+          
+          // Split thinking into lines and render dimmed
+          std::istringstream thinking_stream(state_.current_thinking);
+          std::string thinking_line;
+          while (std::getline(thinking_stream, thinking_line)) {
+            Element line = text(thinking_line) | color(Color::GrayLight) | dim;
+            if (history_elements.size() == render_pos) line = line | focus;
+            history_elements.push_back(line);
+          }
+        } else {
+          Element header = text("▶ Thinking (press 't' to show)") | color(Color::GrayDark) | dim;
+          if (history_elements.size() == render_pos) header = header | focus;
+          history_elements.push_back(header);
+        }
+      }
+      
+      // Answer section
+      if (!state_.current_answer.empty()) {
+        history_elements.push_back(text(""));
+        Element header = text("Final Answer:") | color(Color::Green) | bold;
+        if (history_elements.size() == render_pos) header = header | focus;
+        history_elements.push_back(header);
+        
+        // Split answer into lines
+        std::istringstream answer_stream(state_.current_answer);
+        std::string answer_line;
+        while (std::getline(answer_stream, answer_line)) {
+          Element line = text(answer_line);
+          if (history_elements.size() == render_pos) line = line | focus;
+          history_elements.push_back(line);
+        }
+      }
+    }
 
-    // Show current status if processing
+    // Show spinner if processing
     if (state_.current_stage != PipelineStage::Idle &&
         state_.current_stage != PipelineStage::Complete) {
+      const std::vector<std::string> spinner_chars = 
+        {"⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"};
+      auto spinner = spinner_chars[state_.spinner_frame % 10];
+      
       history_elements.push_back(text(""));
-      auto status_bar = hbox(
-          {text("Working... "), gauge(state_.progress) | flex,
-           text(" " + std::to_string((int)(state_.progress * 100)) + "%")});
+      auto status_bar = hbox({
+        text("Working... ") | color(Color::Yellow),
+        text(spinner) | color(Color::Yellow) | bold
+      });
       
       if (history_elements.size() == render_pos) {
           status_bar = status_bar | focus;
@@ -222,6 +350,25 @@ Component TUI::CreateTerminalView() {
     logo_lines += 2; // Version + empty line
 
     int total_lines = logo_lines + state_.conversation_history.size();
+    
+    // Add thinking/answer sections if present
+    if (!state_.current_thinking.empty()) {
+        // Count thinking lines
+        total_lines += 1; // Header
+        if (state_.show_thinking) {
+            std::istringstream ts(state_.current_thinking);
+            std::string tline;
+            while (std::getline(ts, tline)) total_lines++;
+        }
+    }
+    if (!state_.current_answer.empty()) {
+        // Count answer lines
+        total_lines += 2; // Empty + "Final Answer:" header
+        std::istringstream as(state_.current_answer);
+        std::string aline;
+        while (std::getline(as, aline)) total_lines++;
+    }
+    
     if (state_.current_stage != PipelineStage::Idle &&
         state_.current_stage != PipelineStage::Complete) {
         total_lines += 2;
@@ -313,6 +460,12 @@ Component TUI::CreateInputLine() {
       // Add to command history
       state_.command_history.push_back(state_.user_input);
       state_.history_index = -1; // Reset history browsing
+      
+      // Reset thinking/answer buffers for new request
+      state_.current_thinking.clear();
+      state_.current_answer.clear();
+      state_.in_thinking_section = true;
+      
       if (on_submit_) {
         on_submit_(state_.user_input);
       }
@@ -325,6 +478,12 @@ Component TUI::CreateInputLine() {
   // Simple keyboard shortcuts (press 'm' to switch modes, 'y' to accept, 'n' to
   // reject)
   auto input_with_hotkeys = CatchEvent(input_box, [this](Event event) {
+    // ESC key - interrupt model generation
+    if (event == Event::Escape) {
+      state_.interrupt_inference_.store(true);
+      state_.conversation_history.push_back("[Interrupting...]");
+      return true;
+    }
     // Up arrow - navigate to previous command in history
     if (event == Event::ArrowUp) {
       if (!state_.command_history.empty()) {
@@ -357,6 +516,13 @@ Component TUI::CreateInputLine() {
       // Only switch if input is empty (so typing 'm' in requests still works)
       if (state_.user_input.empty()) {
         SetMode(state_.current_mode == Mode::Plan ? Mode::Auto : Mode::Plan);
+        return true;
+      }
+    }
+    // Press 't' to toggle thinking visibility
+    if (event.is_character() && event.character() == "t") {
+      if (state_.user_input.empty()) {
+        state_.show_thinking = !state_.show_thinking;
         return true;
       }
     }

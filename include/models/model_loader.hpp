@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <atomic>
 
 // Forward declare llama.cpp types
 struct llama_model;
@@ -24,10 +25,11 @@ public:
   // Load model temporarily
   bool Load(const std::string &model_path, int n_ctx = 512);
 
-  // Run inference with optional GBNF grammar
+  // Run inference with optional GBNF grammar and interrupt flag
   std::string Infer(const std::string &prompt, const std::string &grammar,
                     int max_tokens,
-                    std::function<void(const std::string &)> stream_callback);
+                    std::function<void(const std::string &)> stream_callback,
+                    std::atomic<bool>* interrupt_flag = nullptr);
 
   // Unload model (only if not resident)
   void Unload();
@@ -48,7 +50,8 @@ private:
   // Internal inference
   std::string RunInference(const std::string &prompt,
                            const std::string &grammar, int max_tokens,
-                           std::function<void(const std::string &)> stream_callback);
+                           std::function<void(const std::string &)> stream_callback,
+                           std::atomic<bool>* interrupt_flag);
 };
 
 } // namespace models
