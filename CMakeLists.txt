@@ -75,4 +75,22 @@ target_link_libraries(zweek
 )
 
 # Installation
+# Installation
 install(TARGETS zweek DESTINATION bin)
+
+# Testing
+enable_testing()
+
+add_executable(zweek_tests
+    tests/test_tool_executor.cpp
+    src/tools/tool_executor.cpp
+)
+
+target_include_directories(zweek_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+target_link_libraries(zweek_tests
+    PRIVATE
+        nlohmann_json::nlohmann_json
+)
+
+add_test(NAME ToolExecutorTest COMMAND zweek_tests)

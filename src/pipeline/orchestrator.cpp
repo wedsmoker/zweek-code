@@ -14,10 +14,27 @@ Orchestrator::Orchestrator() : command_handler_() {
   // Wire history manager to command handler
   command_handler_.SetHistoryManager(&history_manager_);
   command_handler_.SetChatMode(&chat_mode_);
+  
+  // Wire tool executor to command handler
+  command_handler_.SetToolExecutor(&tool_executor_);
+  
+  // Wire directory change callback
+  command_handler_.SetDirectoryChangeCallback([this](const std::string& path) {
+    if (directory_update_callback_) {
+      directory_update_callback_(path);
+    }
+  });
 }
 
 Orchestrator::~Orchestrator() {
   // Destructor
+}
+
+void Orchestrator::SetWorkingDirectory(const std::string &path) {
+  tool_executor_.SetWorkingDirectory(path);
+  if (directory_update_callback_) {
+      directory_update_callback_(path);
+  }
 }
 
 void Orchestrator::ProcessRequest(const std::string &user_request) {
@@ -76,6 +93,11 @@ void Orchestrator::SetResponseCallback(
 void Orchestrator::SetStreamCallback(
     std::function<void(const std::string &)> callback) {
   stream_callback_ = callback;
+}
+
+void Orchestrator::SetDirectoryUpdateCallback(
+    std::function<void(const std::string &)> callback) {
+  directory_update_callback_ = callback;
 }
 
 void Orchestrator::RunCodePipeline(const std::string &request) {

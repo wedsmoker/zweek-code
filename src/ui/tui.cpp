@@ -1,5 +1,6 @@
 #include "ui/tui.hpp"
 #include "ui/branding.hpp"
+#include "commands/command_handler.hpp"
 #include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <sstream>
@@ -224,6 +225,11 @@ void TUI::SetMode(Mode mode) {
   if (on_mode_switch_) {
     on_mode_switch_(mode);
   }
+  screen_.PostEvent(Event::Custom);
+}
+
+void TUI::SetCurrentDirectory(const std::string &path) {
+  state_.current_directory = path;
   screen_.PostEvent(Event::Custom);
 }
 
@@ -516,6 +522,7 @@ Component TUI::CreateModeSelector() {
     }
 
     return hbox({text(mode_text) | color(Color::Cyan), separator(),
+                 text(" " + state_.current_directory + " ") | color(Color::Yellow), separator(),
                  text(help_text) | dim});
   });
 }
@@ -548,14 +555,58 @@ Component TUI::CreateInputLine() {
   // Simple keyboard shortcuts (press 'm' to switch modes, 'y' to accept, 'n' to
   // reject)
   auto input_with_hotkeys = CatchEvent(input_box, [this](Event event) {
-    // ESC key - interrupt model generation
+    
+    // Enter key - autocomplete if suggestions are showing
+    if (event == Event::Return) {
+      if (state_.show_suggestions && !state_.command_suggestions.empty()) {
+        int idx = state_.suggestion_index >= 0 ? state_.suggestion_index : 0;
+        state_.user_input = "/" + state_.command_suggestions[idx] + " ";
+        state_.show_suggestions = false;
+        state_.command_suggestions.clear();
+        state_.suggestion_index = -1;
+        return true; // Don't submit, just autocomplete
+      }
+      // Otherwise let the default Enter behavior happen (submit)
+      return false;
+    }
+    
+    // ESC key - hide suggestions or interrupt model generation
     if (event == Event::Escape) {
+      if (state_.show_suggestions) {
+        state_.show_suggestions = false;
+        state_.command_suggestions.clear();
+        state_.suggestion_index = -1;
+        return true;
+      }
       state_.interrupt_inference_.store(true);
       state_.conversation_history.push_back("[Interrupting...]");
       return true;
     }
-    // Up arrow - navigate to previous command in history
+    
+    // Tab key - autocomplete
+    if (event == Event::Tab) {
+      if (state_.show_suggestions && !state_.command_suggestions.empty()) {
+        int idx = state_.suggestion_index >= 0 ? state_.suggestion_index : 0;
+        state_.user_input = "/" + state_.command_suggestions[idx] + " ";
+        state_.show_suggestions = false;
+        state_.command_suggestions.clear();
+        state_.suggestion_index = -1;
+        return true;
+      }
+    }
+    
+    // Up arrow - navigate suggestions or command history
     if (event == Event::ArrowUp) {
+      if (state_.show_suggestions && !state_.command_suggestions.empty()) {
+        if (state_.suggestion_index < 0) {
+          state_.suggestion_index = state_.command_suggestions.size() - 1;
+        } else if (state_.suggestion_index > 0) {
+          state_.suggestion_index--;
+        }
+        return true;
+      }
+      
+      // Command history navigation
       if (!state_.command_history.empty()) {
         if (state_.history_index == -1) {
           // Start browsing from most recent
@@ -567,8 +618,19 @@ Component TUI::CreateInputLine() {
         return true;
       }
     }
-    // Down arrow - navigate to next command in history
+    
+    // Down arrow - navigate suggestions or command history
     if (event == Event::ArrowDown) {
+      if (state_.show_suggestions && !state_.command_suggestions.empty()) {
+        if (state_.suggestion_index < 0) {
+          state_.suggestion_index = 0;
+        } else if (state_.suggestion_index < static_cast<int>(state_.command_suggestions.size()) - 1) {
+          state_.suggestion_index++;
+        }
+        return true;
+      }
+      
+      // Command history navigation
       if (state_.history_index != -1) {
         if (state_.history_index < state_.command_history.size() - 1) {
           state_.history_index++;
@@ -581,6 +643,7 @@ Component TUI::CreateInputLine() {
         return true;
       }
     }
+    
     // Press 'm' to switch mode
     if (event.is_character() && event.character() == "m") {
       // Only switch if input is empty (so typing 'm' in requests still works)
@@ -617,9 +680,61 @@ Component TUI::CreateInputLine() {
     return false;
   });
 
-  return Renderer(input_with_hotkeys, [=] {
-    return hbox({text("❯ ") | color(Color::GreenLight) | bold,
+  return Renderer(input_with_hotkeys, [this, input_with_hotkeys] {
+    // Update command suggestions based on current input (runs every frame)
+    if (command_handler_ && !state_.user_input.empty() && state_.user_input[0] == '/') {
+      std::string query = state_.user_input.substr(1); // Remove leading "/"
+      auto all_commands = command_handler_->GetAvailableCommands();
+      
+      state_.command_suggestions.clear();
+      for (const auto& cmd : all_commands) {
+        if (query.empty() || cmd.find(query) == 0) {
+          state_.command_suggestions.push_back(cmd);
+        }
+      }
+      
+      state_.show_suggestions = !state_.command_suggestions.empty();
+      
+      // Reset selection if suggestions changed
+      if (state_.suggestion_index >= static_cast<int>(state_.command_suggestions.size())) {
+        state_.suggestion_index = state_.command_suggestions.empty() ? -1 : 0;
+      }
+    } else {
+      state_.show_suggestions = false;
+      state_.command_suggestions.clear();
+      state_.suggestion_index = -1;
+    }
+    
+    auto input_element = hbox({text("❯ ") | color(Color::GreenLight) | bold,
                  input_with_hotkeys->Render() | flex});
+    
+    // Show suggestions if available
+    if (state_.show_suggestions && !state_.command_suggestions.empty()) {
+      Elements suggestions;
+      suggestions.push_back(text("  Available commands:") | color(Color::Cyan) | dim);
+      
+      for (size_t i = 0; i < state_.command_suggestions.size(); ++i) {
+        std::string prefix = (static_cast<int>(i) == state_.suggestion_index) ? "▶ /" : "  /";
+        auto suggestion_text = text(prefix + state_.command_suggestions[i]);
+        
+        if (static_cast<int>(i) == state_.suggestion_index) {
+          suggestion_text = suggestion_text | color(Color::GreenLight) | bold;
+        } else {
+          suggestion_text = suggestion_text | color(Color::GrayLight);
+        }
+        
+        suggestions.push_back(suggestion_text);
+      }
+      
+      suggestions.push_back(text("  Tab: autocomplete  ↑↓: navigate  Esc: cancel") | color(Color::GrayDark) | dim);
+      
+      return vbox({
+        vbox(suggestions) | border,
+        input_element
+      });
+    }
+    
+    return input_element;
   });
 }
 

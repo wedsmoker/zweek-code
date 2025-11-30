@@ -8,8 +8,25 @@ using namespace zweek::ui;
 using namespace zweek::pipeline;
 
 int main(int argc, char **argv) {
+  // Parse command line arguments
+  std::string working_dir = ".";
+  if (argc > 1) {
+    working_dir = argv[1];
+  }
+
   TUI tui;
   Orchestrator orchestrator;
+  
+  // Set command handler for autocomplete
+  tui.SetCommandHandler(orchestrator.GetCommandHandler());
+  
+  // Connect directory update callback BEFORE setting working directory
+  orchestrator.SetDirectoryUpdateCallback([&](const std::string &path) {
+    tui.SetCurrentDirectory(path);
+  });
+  
+  // Now set the working directory (will trigger callback)
+  orchestrator.SetWorkingDirectory(working_dir);
 
   // Restore previous session if available
   auto* history_mgr = orchestrator.GetHistoryManager();

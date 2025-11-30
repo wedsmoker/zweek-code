@@ -120,6 +120,8 @@ Download from HuggingFace (GGUF Q8 quantized versions).
 - `/sessions` - List saved sessions
 - `/load <index>` - Load a previous session
 - `/clear-history` - Clear current session history
+- `/cd <path>` - Change working directory
+- `/ls [path]` - List files in directory (current if no path given)
 
 ## Keyboard Shortcuts
 

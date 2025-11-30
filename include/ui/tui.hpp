@@ -8,6 +8,12 @@
 
 
 namespace zweek {
+
+// Forward declarations
+namespace commands {
+  class CommandHandler;
+}
+
 namespace ui {
 
 enum class PipelineStage {
@@ -48,6 +54,12 @@ struct TUIState {
   bool in_thinking_section = true;  // Track which section we're in
   bool show_thinking = true;     // Toggle thinking visibility
   int spinner_frame = 0;         // Spinner animation frame
+  std::string current_directory; // Current working directory
+  
+  // Command autocomplete
+  std::vector<std::string> command_suggestions;
+  int suggestion_index = -1;
+  bool show_suggestions = false;
 };
 
 class TUI {
@@ -65,6 +77,7 @@ public:
   void SetError(const std::string &error);
   void AddToHistory(const std::string &message);
   void AppendToLastMessage(const std::string &chunk);
+  void SetCurrentDirectory(const std::string &path);
 
   // Mode switching
   void SetMode(Mode mode);
@@ -76,6 +89,11 @@ public:
   void SetOnReject(std::function<void()> callback);
   void SetOnModify(std::function<void()> callback);
   void SetOnModeSwitch(std::function<void(Mode)> callback);
+  
+  // Set command handler for autocomplete
+  void SetCommandHandler(zweek::commands::CommandHandler* cmd_handler) {
+    command_handler_ = cmd_handler;
+  }
   
   // Access to state (for interrupt flag)
   TUIState& GetState() { return state_; }
@@ -98,6 +116,9 @@ private:
   std::function<void()> on_reject_;
   std::function<void()> on_modify_;
   std::function<void(Mode)> on_mode_switch_;
+  
+  // Command handler for autocomplete
+  zweek::commands::CommandHandler* command_handler_ = nullptr;
 };
 
 } // namespace ui

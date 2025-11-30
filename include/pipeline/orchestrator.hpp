@@ -4,6 +4,7 @@
 #include "commands/command_handler.hpp"
 #include "history/history_manager.hpp"
 #include "pipeline/router.hpp"
+#include "tools/tool_executor.hpp"
 #include <functional>
 #include <string>
 #include <atomic>
@@ -21,16 +22,23 @@ public:
   // Main entry point - processes user request
   void ProcessRequest(const std::string &user_request);
 
+  // Set working directory
+  void SetWorkingDirectory(const std::string &path);
+
   // Set callbacks for UI updates
   void SetProgressCallback(std::function<void(const std::string &)> callback);
   void SetResponseCallback(std::function<void(const std::string &)> callback);
   void SetStreamCallback(std::function<void(const std::string &)> callback);
+  void SetDirectoryUpdateCallback(std::function<void(const std::string &)> callback);
   
   // Set interrupt flag for cancellation
   void SetInterruptFlag(std::atomic<bool>* flag) { interrupt_flag_ = flag; }
   
   // Get history manager for external use
   history::HistoryManager* GetHistoryManager() { return &history_manager_; }
+  
+  // Get command handler for external use
+  commands::CommandHandler* GetCommandHandler() { return &command_handler_; }
 
 private:
   // Workflow handlers
@@ -42,11 +50,13 @@ private:
   chat::ChatMode chat_mode_;
   commands::CommandHandler command_handler_;
   history::HistoryManager history_manager_;
+  tools::ToolExecutor tool_executor_;
 
   // Callbacks
   std::function<void(const std::string &)> progress_callback_;
   std::function<void(const std::string &)> response_callback_;
   std::function<void(const std::string &)> stream_callback_;
+  std::function<void(const std::string &)> directory_update_callback_;
   
   // Interrupt flag
   std::atomic<bool>* interrupt_flag_ = nullptr;

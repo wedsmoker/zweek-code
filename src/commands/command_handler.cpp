@@ -1,6 +1,7 @@
 #include "commands/command_handler.hpp"
 #include "history/history_manager.hpp"
 #include "chat/chat_mode.hpp"
+#include "tools/tool_executor.hpp"
 #include <filesystem>
 
 namespace zweek {
@@ -166,7 +167,88 @@ CommandResult CommandHandler::HandleCommand(const std::string &input) {
     return result;
   }
 
+  // Handle /cd <path>
+  if (cmd == "cd") {
+    result.handled = true;
+    if (!tool_executor_) {
+      result.response = "Error: Tool executor not available.";
+      return result;
+    }
+
+    if (args.empty()) {
+      result.response = "Usage: /cd <path>";
+      return result;
+    }
+
+    std::string path = args;
+    
+    // Resolve path relative to ToolExecutor's working directory
+    std::filesystem::path target_path(path);
+    if (!target_path.is_absolute()) {
+      // Resolve relative to ToolExecutor's current working directory
+      std::filesystem::path current_wd(tool_executor_->GetWorkingDirectory());
+      target_path = current_wd / target_path;
+    }
+    
+    // Normalize the path
+    std::error_code ec;
+    target_path = std::filesystem::canonical(target_path, ec);
+    if (ec) {
+      // canonical failed, try without normalization
+      target_path = std::filesystem::absolute(target_path);
+    }
+    
+    // Check if it exists and is a directory
+    if (std::filesystem::exists(target_path, ec) && std::filesystem::is_directory(target_path, ec)) {
+      tool_executor_->SetWorkingDirectory(target_path.string());
+      
+      // Notify UI
+      if (directory_change_callback_) {
+        directory_change_callback_(target_path.string());
+      }
+      result.response = "Changed directory to: " + target_path.string();
+    } else {
+      result.response = "Error: Directory not found: " + path;
+    }
+    return result;
+  }
+
+  // Handle /ls [path]
+  if (cmd == "ls") {
+    result.handled = true;
+    if (!tool_executor_) {
+      result.response = "Error: Tool executor not available.";
+      return result;
+    }
+
+    std::string path = args.empty() ? "." : args;
+    auto files = tool_executor_->ListDir(path);
+    
+    if (files.empty()) {
+        result.response = "No files found in " + path;
+    } else {
+        std::string output = "Files in " + path + ":\n";
+        for (const auto& file : files) {
+            output += file + "\n";
+        }
+        result.response = output;
+    }
+    return result;
+  }
+
   return result;
+}
+
+std::vector<std::string> CommandHandler::GetAvailableCommands() const {
+  return {
+    "help",
+    "history",
+    "sessions",
+    "load",
+    "clear-history",
+    "cd",
+    "ls"
+  };
 }
 
 std::string CommandHandler::GetHelpText() {
@@ -180,6 +262,8 @@ Available Commands:
   /sessions - List available sessions
   /load <id> - Load a previous session
   /clear-history - Clear current session history
+  /cd <path> - Change working directory
+  /ls [path] - List files in directory (current if no path given)
 
 Tips:
   • Type code requests: "add error handling" or "refactor this function"
