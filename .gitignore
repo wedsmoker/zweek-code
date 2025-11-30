@@ -36,3 +36,8 @@ Thumbs.db
 .idea/
 .cache/
 *.code-workspace
+
+# History & Debug
+debug_response.txt
+zweek_history.json
+*.json # Session history (except compile_commands.json which is handled above)

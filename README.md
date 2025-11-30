@@ -108,9 +108,25 @@ Download from HuggingFace (GGUF Q8 quantized versions).
 
 ✅ TUI with FTXUI  
 ✅ Router with GBNF  
-✅ Chat mode with TinyLlama  
+✅ Chat mode with Qwen3  
 ✅ Compiler-based validation  
 ✅ Command system  
+✅ Persistent Chat History  
+
+## Commands
+
+- `/help` - Show available commands
+- `/history [n]` - Show last n messages
+- `/sessions` - List saved sessions
+- `/load <index>` - Load a previous session
+- `/clear-history` - Clear current session history
+
+## Keyboard Shortcuts
+
+- `m` - Switch between Plan and Auto mode
+- `t` - Toggle visibility of "Thinking" sections
+- `y`/`n` - Accept/reject changes  
+- `Ctrl+C` - Exit
 
 ## Tech Stack
 

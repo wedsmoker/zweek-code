@@ -7,6 +7,12 @@
 
 
 namespace zweek {
+
+// Forward declaration
+namespace history {
+  class HistoryManager;
+}
+
 namespace chat {
 
 // Chat message structure
@@ -26,6 +32,11 @@ public:
 
   // Unload to free memory
   void UnloadModel();
+  
+  // Set history manager for persistence (optional)
+  void SetHistoryManager(history::HistoryManager* history_mgr) { 
+    history_manager_ = history_mgr; 
+  }
 
   // Chat with context
   std::string Chat(const std::string &user_message,
@@ -38,11 +49,15 @@ public:
 
   // Clear conversation
   void ClearHistory();
+  
+  // Load history from persistence (if available)
+  void LoadSessionHistory();
 
 private:
   bool model_loaded_ = false;
   std::vector<Message> history_;
   models::ModelLoader model_loader_;
+  history::HistoryManager* history_manager_ = nullptr;
 };
 
 } // namespace chat

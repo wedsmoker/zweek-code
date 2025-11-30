@@ -1,4 +1,7 @@
 #include "commands/command_handler.hpp"
+#include "history/history_manager.hpp"
+#include "chat/chat_mode.hpp"
+#include <filesystem>
 
 namespace zweek {
 namespace commands {
@@ -17,11 +20,150 @@ CommandResult CommandHandler::HandleCommand(const std::string &input) {
 
   // Parse command
   std::string cmd = input.substr(1);
+  std::string args;
+  size_t space_pos = cmd.find(' ');
+  if (space_pos != std::string::npos) {
+    args = cmd.substr(space_pos + 1);
+    cmd = cmd.substr(0, space_pos);
+  }
 
   // Handle /help
   if (cmd == "help") {
     result.handled = true;
     result.response = GetHelpText();
+    return result;
+  }
+
+  // Handle /history [limit]
+  if (cmd == "history") {
+    result.handled = true;
+    if (!history_manager_) {
+      result.response = "Error: History manager not available.";
+      return result;
+    }
+    
+    int limit = 10; // Default
+    if (!args.empty()) {
+      try {
+        limit = std::stoi(args);
+      } catch (...) {
+        // Ignore parsing error
+      }
+    }
+    
+    auto history = history_manager_->GetChatHistory(limit);
+    if (history.empty()) {
+      result.response = "No chat history available.";
+    } else {
+      std::string output = "Chat History (last " + std::to_string(history.size()) + " messages):\n";
+      for (const auto& msg : history) {
+        output += "[" + msg.role + "]: " + msg.content + "\n";
+      }
+      result.response = output;
+    }
+    return result;
+  }
+
+  // Handle /sessions
+  if (cmd == "sessions") {
+    result.handled = true;
+    if (!history_manager_) {
+      result.response = "Error: History manager not available.";
+      return result;
+    }
+    
+    // Update cache
+    cached_sessions_ = history_manager_->GetAvailableSessions();
+    std::string current = history_manager_->GetCurrentSessionId();
+    
+    std::string output = "Available Sessions:\n";
+    if (cached_sessions_.empty()) {
+      output += "(No saved sessions found)\n";
+    } else {
+      for (size_t i = 0; i < cached_sessions_.size(); ++i) {
+        std::string marker = (cached_sessions_[i] == current) ? "* " : "  ";
+        output += marker + "[" + std::to_string(i + 1) + "] " + cached_sessions_[i] + "\n";
+      }
+    }
+    result.response = output;
+    return result;
+  }
+
+  // Handle /load <index_or_id>
+  if (cmd == "load") {
+    result.handled = true;
+    if (!history_manager_ || !chat_mode_) {
+      result.response = "Error: History manager or Chat mode not available.";
+      return result;
+    }
+    
+    if (args.empty()) {
+      result.response = "Usage: /load <index> (run /sessions first to see indices)";
+      return result;
+    }
+    
+    std::string session_id = args;
+    
+    // Check if input is a number (index)
+    bool is_number = !args.empty() && std::all_of(args.begin(), args.end(), ::isdigit);
+    
+    if (is_number) {
+      int index = std::stoi(args);
+      
+      // If cache is empty, try to populate it
+      if (cached_sessions_.empty()) {
+        cached_sessions_ = history_manager_->GetAvailableSessions();
+      }
+      
+      if (index > 0 && index <= static_cast<int>(cached_sessions_.size())) {
+        session_id = cached_sessions_[index - 1];
+      } else {
+        result.response = "Error: Invalid session index. Run /sessions to see available sessions.";
+        return result;
+      }
+    }
+    
+    std::string dir = history_manager_->GetSessionsDirectory();
+    std::string path = dir + "/" + session_id + ".json";
+    
+    #ifdef _WIN32
+    path = dir + "\\" + session_id + ".json";
+    #endif
+    
+    if (history_manager_->LoadFromFile(path)) {
+      chat_mode_->LoadSessionHistory();
+      
+      // Construct full history output for TUI
+      // Start with [CLEAR] token to clear existing TUI history
+      std::string output = "[CLEAR]\nSession loaded: " + session_id + "\n";
+      
+      auto history = chat_mode_->GetHistory();
+      for (const auto& msg : history) {
+        if (msg.role == "user") {
+          output += "> " + msg.content + "\n";
+        } else {
+          output += msg.content + "\n";
+        }
+      }
+      result.response = output;
+    } else {
+      result.response = "Error: Failed to load session " + session_id;
+    }
+    return result;
+  }
+
+  // Handle /clear-history
+  if (cmd == "clear-history") {
+    result.handled = true;
+    if (!history_manager_) {
+      result.response = "Error: History manager not available.";
+      return result;
+    }
+    
+    history_manager_->ClearChatHistory();
+    if (chat_mode_) chat_mode_->ClearHistory();
+    result.response = "[CLEAR]\nChat history cleared for this session.";
+    return result;
   }
 
   return result;
@@ -34,6 +176,10 @@ Seven specialized models working together to keep your code private and your wor
 
 Available Commands:
   /help - Show this message
+  /history [n] - Show last n chat messages
+  /sessions - List available sessions
+  /load <id> - Load a previous session
+  /clear-history - Clear current session history
 
 Tips:
   • Type code requests: "add error handling" or "refactor this function"

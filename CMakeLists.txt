@@ -4,6 +4,11 @@ project(zweek VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  message(STATUS "Setting build type to '${CMAKE_BUILD_TYPE}' as none was specified.")
+endif()
+
 # Dependencies
 include(FetchContent)
 
@@ -50,6 +55,7 @@ set(SOURCES
     src/tools/tool_executor.cpp
     src/tools/compiler_check.cpp
     src/commands/command_handler.cpp
+    src/history/history_manager.cpp
 )
 
 # Create executable

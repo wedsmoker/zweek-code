@@ -55,14 +55,76 @@ void TUI::SetError(const std::string &error) {
 }
 
 void TUI::AddToHistory(const std::string &message) {
-  // Split multi-line messages into separate entries
-  std::istringstream stream(message);
+  // Check for clear command
+  if (message.find("[CLEAR]") == 0) {
+    state_.conversation_history.clear();
+    // Remove [CLEAR] and newline from message
+    std::string remaining = message.substr(7);
+    if (!remaining.empty() && remaining[0] == '\n') remaining = remaining.substr(1);
+    if (remaining.empty()) {
+        screen_.PostEvent(Event::Custom);
+        return;
+    }
+    // Process remaining message recursively or continue
+    // Better to just continue with remaining as message
+    // But we need to be careful about recursion if we call AddToHistory(remaining)
+    // So let's just update local variable 'message' (but it's const ref)
+    // So we'll use a local string
+    std::string processed_msg = remaining;
+    
+    // Fall through to normal processing with processed_msg
+    // But we need to restructure the function to handle this cleanly
+    // Let's just restart the function logic with the new string
+    // Since we can't reassign const ref, we'll copy logic.
+    // Actually, simpler:
+    AddToHistory(processed_msg);
+    return;
+  }
+
+  std::string thinking_part;
+  std::string answer_part = message;
+
+  // Check for thinking section
+  size_t think_end = message.find("</think>");
+  if (think_end != std::string::npos) {
+    thinking_part = message.substr(0, think_end);
+    // Skip </think> (8 chars) and potential newline
+    size_t answer_start = think_end + 8;
+    if (answer_start < message.length() && message[answer_start] == '\n') {
+      answer_start++;
+    }
+    answer_part = message.substr(answer_start);
+  }
+
+  // Add thinking lines if present
+  if (!thinking_part.empty()) {
+    std::istringstream stream(thinking_part);
+    std::string line;
+    while (std::getline(stream, line)) {
+      if (!line.empty()) {
+        // Remove <|im_start|>think or similar if present at start
+        if (line.find("<|im_start|>think") != std::string::npos) {
+            continue; 
+        }
+        state_.conversation_history.push_back("[THINKING] " + line);
+      }
+    }
+  }
+
+  // Add answer lines
+  std::istringstream stream(answer_part);
   std::string line;
   while (std::getline(stream, line)) {
     if (!line.empty()) {
       state_.conversation_history.push_back(line);
     }
   }
+  
+  // Clear streaming buffers now that they are in history
+  state_.current_thinking.clear();
+  state_.current_answer.clear();
+  state_.in_thinking_section = true; // Reset for next turn
+
   screen_.PostEvent(Event::Custom);
 }
 
@@ -255,6 +317,14 @@ Component TUI::CreateTerminalView() {
       } else if (msg.find(">") == 0) {
         // User input
         e = text(msg) | color(Color::White) | bold;
+      } else if (msg.find("[THINKING] ") == 0) {
+        // Thinking content
+        if (state_.show_thinking) {
+            e = text(msg.substr(11)) | color(Color::GrayLight) | dim;
+        } else {
+            // Skip rendering if hidden
+            continue; 
+        }
       } else {
         e = text(msg);
       }

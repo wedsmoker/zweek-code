@@ -5,7 +5,15 @@ namespace zweek {
 namespace pipeline {
 
 Orchestrator::Orchestrator() : command_handler_() {
-  // Constructor
+  // Initialize history manager
+  history_manager_.Init("");
+  
+  // Wire history manager to chat mode
+  chat_mode_.SetHistoryManager(&history_manager_);
+  
+  // Wire history manager to command handler
+  command_handler_.SetHistoryManager(&history_manager_);
+  command_handler_.SetChatMode(&chat_mode_);
 }
 
 Orchestrator::~Orchestrator() {
@@ -94,7 +102,7 @@ void Orchestrator::RunChatMode(const std::string &request) {
 
   // Mark as complete after streaming finishes
   if (response_callback_) {
-    response_callback_("");
+    response_callback_(response);
   }
 }
 

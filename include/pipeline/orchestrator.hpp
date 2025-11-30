@@ -2,6 +2,7 @@
 
 #include "chat/chat_mode.hpp"
 #include "commands/command_handler.hpp"
+#include "history/history_manager.hpp"
 #include "pipeline/router.hpp"
 #include <functional>
 #include <string>
@@ -27,6 +28,9 @@ public:
   
   // Set interrupt flag for cancellation
   void SetInterruptFlag(std::atomic<bool>* flag) { interrupt_flag_ = flag; }
+  
+  // Get history manager for external use
+  history::HistoryManager* GetHistoryManager() { return &history_manager_; }
 
 private:
   // Workflow handlers
@@ -37,6 +41,7 @@ private:
   Router router_;
   chat::ChatMode chat_mode_;
   commands::CommandHandler command_handler_;
+  history::HistoryManager history_manager_;
 
   // Callbacks
   std::function<void(const std::string &)> progress_callback_;
